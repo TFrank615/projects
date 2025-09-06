@@ -224,9 +224,9 @@
 
                 const cardItem = `
                     <div id="${hospital.id}" class="bg-slate-800/50 border border-slate-700 rounded-lg shadow-md flex flex-col transition-all duration-300 hover:bg-slate-800/80 hover:border-slate-600/80 border-t-4 ${statusBorderClass}">
-                        <div class="p-3 flex flex-col flex-grow min-h-[140px]">
+                        <div class="p-3 flex flex-col flex-grow min-h-[150px]">
                             <div class="flex justify-between items-start gap-2">
-                                <h2 class="text-base font-bold text-slate-100">${hospital.name}</h2>
+                                <h2 class="text-base font-bold text-slate-100 min-w-0">${hospital.name}</h2>
                                 <span class="flex-shrink-0 text-xs font-semibold ${statusTextClass} bg-slate-900/50 px-2 py-0.5 rounded-full">${statusText}</span>
                             </div>
                             <p class="text-xs text-slate-400 mt-2 flex-grow">${hospital.notes || 'No updates.'}</p>
