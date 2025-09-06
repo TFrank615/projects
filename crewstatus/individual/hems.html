@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Station Status Update</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
+        .confirm-modal-button { transition: background-color 0.2s; }
+    </style>
+</head>
+<body class="bg-gray-200 dark:bg-gray-900 font-sans">
+
+    <header class="bg-red-700 shadow-lg">
+        <div class="container mx-auto px-4 py-4 flex justify-between items-center">
+            <h1 class="text-3xl font-bold text-white">STATION STATUS UPDATE - HUSTEAD EMS</h1>
+        </div>
+    </header>
+
+    <main id="app-container" class="container mx-auto p-4 md:p-8">
+        <div id="error-container" class="hidden bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4" role="alert">
+            <p class="font-bold">Configuration Needed</p>
+            <p id="error-message"></p>
+        </div>
+
+        <div id="spinner-container" class="flex justify-center items-center h-full py-16">
+            <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-red-600"></div>
+        </div>
+        
+        <!-- Main app content -->
+        <div id="content-container" class="hidden">
+            <!-- Station will be injected here -->
+            <div id="station-container"></div>
+        </div>
+    </main>
+
+    <!-- Modals -->
+    <div id="add-crew-modal" class="hidden fixed inset-0 bg-black bg-opacity-50 z-50 justify-center items-center p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6 w-full max-w-md relative">
+            <button id="add-crew-modal-close" class="absolute top-3 right-3 text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" /></svg>
+            </button>
+            <div id="add-crew-modal-content"></div>
+        </div>
+    </div>
+    <div id="confirm-modal" class="hidden fixed inset-0 bg-black bg-opacity-60 z-50 justify-center items-center p-4">
+        <div class="bg-white dark:bg-gray-800 rounded-lg shadow-2xl p-6 w-full max-w-sm text-center">
+            <p id="confirm-modal-message" class="text-lg mb-6 dark:text-gray-200"></p>
+            <div class="flex justify-center gap-4">
+                <button id="confirm-modal-cancel" class="confirm-modal-button w-24 bg-gray-500 text-white font-bold py-2 px-4 rounded-md hover:bg-gray-600">Cancel</button>
+                <button id="confirm-modal-confirm" class="confirm-modal-button w-24 bg-red-600 text-white font-bold py-2 px-4 rounded-md hover:bg-red-700">Delete</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+    
+    <script>
+        // --- !!! CONFIGURATION REQUIRED !!! ---
+        // Paste the ID of the station this page should control.
+        // You can find the ID in your Firebase Firestore database.
+        const PREDEFINED_STATION_ID = "station-1756991530145";
+
+        const firebaseConfig = {
+          apiKey: "AIzaSyAaCahDa2xTO_ukTIhR3KLUCWPUI4dBd-o",
+          authDomain: "clark-county-fire-status.firebaseapp.com",
+          projectId: "clark-county-fire-status",
+          storageBucket: "clark-county-fire-status.firebasestorage.app",
+          messagingSenderId: "60516695608",
+          appId: "1:60516695608:web:24b87b5d108ba5ea2830cd",
+          measurementId: "G-GBBK5WTWR9"
+        };
+
+        let db, auth, firestoreUnsubscribe = null;
+
+        const spinner = document.getElementById('spinner-container');
+        const errorContainer = document.getElementById('error-container');
+        const errorMessage = document.getElementById('error-message');
+        const contentContainer = document.getElementById('content-container');
+        const stationContainer = document.getElementById('station-container');
+        
+        // Modals
+        const addCrewModal = document.getElementById('add-crew-modal');
+        const addCrewModalContent = document.getElementById('add-crew-modal-content');
+        const addCrewModalClose = document.getElementById('add-crew-modal-close');
+        const confirmModal = document.getElementById('confirm-modal');
+        const confirmModalMessage = document.getElementById('confirm-modal-message');
+        const confirmModalCancel = document.getElementById('confirm-modal-cancel');
+        const confirmModalConfirm = document.getElementById('confirm-modal-confirm');
+
+        function showError(message) {
+            spinner.classList.add('hidden');
+            errorMessage.textContent = message;
+            errorContainer.classList.remove('hidden');
+            contentContainer.classList.add('hidden');
+        }
+
+        function listenToFirestore(stationId) {
+            if (firestoreUnsubscribe) firestoreUnsubscribe();
+
+            firestoreUnsubscribe = db.collection("stations").doc(stationId)
+                .onSnapshot((doc) => {
+                    if (doc.exists) {
+                        renderStation({ id: doc.id, ...doc.data() });
+                    } else {
+                        showError("The configured station ID could not be found in the database.");
+                    }
+                }, err => {
+                    console.error("Error listening to station:", err);
+                    showError("Connection to the database lost.");
+                });
+        }
+        
+        function renderStation(station) {
+            spinner.classList.add('hidden');
+            contentContainer.classList.remove('hidden');
+
+            const totalEMS = station.crews.filter(c => c.status === 'On Duty').reduce((sum, c) => sum + (c.emsPersonnel || 0), 0);
+            const totalFire = station.crews.filter(c => c.status === 'On Duty').reduce((sum, c) => sum + (c.firePersonnel || 0), 0);
+            
+            stationContainer.innerHTML = `
+                <div class="bg-white dark:bg-gray-800 rounded-lg shadow-lg overflow-hidden">
+                    <div class="p-4 bg-gray-900 text-white flex justify-between items-center">
+                        <h2 class="text-2xl font-bold">${station.name}</h2>
+                        <button data-action="open-add-crew-modal" class="bg-green-600 text-white font-bold py-2 px-4 rounded-md hover:bg-green-700 transition-colors">
+                            + Add Crew
+                        </button>
+                    </div>
+                    
+                    <div class="p-4 grid grid-cols-1 md:grid-cols-2 gap-4 bg-gray-100 dark:bg-gray-700 border-b-4 border-red-600">
+                        <div class="bg-blue-100 dark:bg-blue-900 p-3 rounded-lg text-center">
+                            <p class="text-lg font-semibold text-blue-800 dark:text-blue-200">Total EMS On Duty</p>
+                            <p class="text-4xl font-bold text-blue-900 dark:text-blue-100">${totalEMS}</p>
+                        </div>
+                        <div class="bg-orange-100 dark:bg-orange-900 p-3 rounded-lg text-center">
+                            <p class="text-lg font-semibold text-orange-800 dark:text-orange-200">Total Fire On Duty</p>
+                            <p class="text-4xl font-bold text-orange-900 dark:text-orange-100">${totalFire}</p>
+                        </div>
+                    </div>
+
+                    <div class="p-2 md:p-4">
+                        <div class="hidden md:grid grid-cols-12 gap-2 font-bold text-sm text-gray-600 dark:text-gray-300 p-3">
+                            <div class="col-span-4">Crew</div>
+                            <div class="col-span-2 text-center">Status</div>
+                            <div class="col-span-2 text-center">EMS</div>
+                            <div class="col-span-2 text-center">Fire</div>
+                            <div class="col-span-2 text-center">Actions</div>
+                        </div>
+                        ${station.crews.length > 0 
+                            ? station.crews.sort((a,b) => a.name.localeCompare(b.name)).map(crew => createCrewRowHTML(station.id, crew)).join('')
+                            : '<p class="p-4 text-center text-gray-500 dark:text-gray-400">No crews assigned to this station yet.</p>'
+                        }
+                    </div>
+                </div>
+            `;
+        }
+
+        function createCrewRowHTML(stationId, crew) {
+             const statusButtonClass = crew.status === 'On Duty' 
+                ? 'bg-green-600 hover:bg-green-700 text-white' 
+                : 'bg-gray-500 hover:bg-gray-600 text-white';
+            const personnelButtonClasses = "bg-gray-300 dark:bg-gray-600 text-gray-800 dark:text-gray-200 font-bold h-8 w-8 rounded-full hover:bg-gray-400 dark:hover:bg-gray-500 transition-colors flex items-center justify-center";
+            return `
+                <div class="grid grid-cols-1 md:grid-cols-12 gap-2 items-center p-3 border-b border-gray-200 dark:border-gray-700" data-crew-id="${crew.id}">
+                    <div class="md:col-span-4 font-bold text-gray-800 dark:text-gray-100">${crew.name}</div>
+                    <div class="md:col-span-2">
+                        <button data-action="toggle-status" class="w-full font-semibold py-2 px-3 rounded-md transition-colors disabled:opacity-50 ${statusButtonClass}">${crew.status}</button>
+                    </div>
+                    <div class="md:col-span-2 flex items-center justify-center space-x-2">
+                        <button data-action="decrement" data-field="ems" class="${personnelButtonClasses}">-</button>
+                        <span class="w-8 text-center font-semibold text-lg dark:text-gray-200">${crew.emsPersonnel}</span>
+                        <button data-action="increment" data-field="ems" class="${personnelButtonClasses}">+</button>
+                    </div>
+                    <div class="md:col-span-2 flex items-center justify-center space-x-2">
+                        <button data-action="decrement" data-field="fire" class="${personnelButtonClasses}">-</button>
+                        <span class="w-8 text-center font-semibold text-lg dark:text-gray-200">${crew.firePersonnel}</span>
+                        <button data-action="increment" data-field="fire" class="${personnelButtonClasses}">+</button>
+                    </div>
+                    <div class="md:col-span-2 flex justify-center">
+                        <button data-action="delete-crew" data-crew-name="${crew.name}" class="bg-red-600 text-white font-semibold p-2 rounded-md hover:bg-red-700"><svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 pointer-events-none" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm4 0a1 1 0 012 0v6a1 1 0 11-2 0V8z" clip-rule="evenodd" /></svg></button>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function handleAddCrew(e) {
+            e.preventDefault();
+            const form = e.target;
+            const newCrewName = form.crewName.value.trim();
+            if (!newCrewName) return;
+            form.querySelector('button[type="submit"]').disabled = true;
+
+            const newCrew = { name: newCrewName, status: 'Off Duty', emsPersonnel: 0, firePersonnel: 0, id: `crew-${Date.now()}`, lastUpdated: new Date().toISOString() };
+            const stationRef = db.collection("stations").doc(PREDEFINED_STATION_ID);
+            try {
+                await stationRef.update({ crews: firebase.firestore.FieldValue.arrayUnion(newCrew) });
+                closeAddCrewModal();
+            } catch (error) { console.error("Error adding crew: ", error); }
+        }
+
+        async function handleCrewAction(e) {
+            const button = e.target;
+            const action = button.dataset.action;
+            if (!action) return;
+
+            const crewRow = button.closest('[data-crew-id]');
+            const crewId = crewRow.dataset.crewId;
+            const stationRef = db.collection("stations").doc(PREDEFINED_STATION_ID);
+            
+            button.disabled = true;
+
+            try {
+                await db.runTransaction(async (transaction) => {
+                    const stationDoc = await transaction.get(stationRef);
+                    if (!stationDoc.exists) throw "Station not found.";
+
+                    let crews = stationDoc.data().crews;
+                    const crewIndex = crews.findIndex(c => c.id === crewId);
+                    if (crewIndex === -1) throw "Crew not found.";
+
+                    const field = button.dataset.field; // 'ems' or 'fire'
+
+                    if (action === 'toggle-status') {
+                        const newStatus = crews[crewIndex].status === 'On Duty' ? 'Off Duty' : 'On Duty';
+                        crews[crewIndex].status = newStatus;
+                        crews[crewIndex].lastUpdated = new Date().toISOString();
+                    } else if (action === 'increment') {
+                        crews[crewIndex][`${field}Personnel`]++;
+                        crews[crewIndex].lastUpdated = new Date().toISOString();
+                    } else if (action === 'decrement') {
+                        if (crews[crewIndex][`${field}Personnel`] > 0) {
+                            crews[crewIndex][`${field}Personnel`]--;
+                            crews[crewIndex].lastUpdated = new Date().toISOString();
+                        }
+                    } else if (action === 'delete-crew') {
+                        const crewName = button.dataset.crewName;
+                        showConfirmModal(`Delete ${crewName}?`, async () => {
+                            const newCrews = crews.filter(c => c.id !== crewId);
+                            await stationRef.update({ crews: newCrews });
+                        });
+                        return;
+                    }
+                    transaction.update(stationRef, { crews: crews });
+                });
+            } catch (err) {
+                console.error(`Error on action ${action}:`, err);
+            }
+        }
+
+        function openAddCrewModal() {
+            addCrewModalContent.innerHTML = `
+                <h3 class="text-xl font-bold mb-4 dark:text-gray-100">Add New Crew</h3>
+                <form id="add-crew-form">
+                    <input type="text" name="crewName" placeholder="e.g., Engine 1" class="w-full p-2 border rounded-md dark:bg-gray-700 dark:text-gray-200" required autofocus/>
+                    <div class="flex justify-end gap-2 mt-4">
+                        <button type="button" class="bg-gray-500 text-white font-bold py-2 px-4 rounded-md hover:bg-gray-600" id="cancel-add-crew">Cancel</button>
+                        <button type="submit" class="bg-green-600 text-white font-bold py-2 px-4 rounded-md hover:bg-green-700">Add Crew</button>
+                    </div>
+                </form>
+            `;
+            addCrewModal.classList.remove('hidden');
+            addCrewModal.classList.add('flex');
+            document.getElementById('cancel-add-crew').addEventListener('click', closeAddCrewModal);
+        }
+        function closeAddCrewModal() {
+            addCrewModal.classList.add('hidden');
+            addCrewModal.classList.remove('flex');
+        }
+        function showConfirmModal(message, onConfirm) {
+            confirmModalMessage.textContent = message;
+            confirmModal.classList.remove('hidden');
+            confirmModal.classList.add('flex');
+            
+            const newConfirmBtn = confirmModalConfirm.cloneNode(true);
+            confirmModalConfirm.parentNode.replaceChild(newConfirmBtn, confirmModalConfirm);
+
+            newConfirmBtn.addEventListener('click', () => { onConfirm(); closeConfirmModal(); }, { once: true });
+        }
+        function closeConfirmModal() {
+            confirmModal.classList.add('hidden');
+            confirmModal.classList.remove('flex');
+        }
+
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                if (PREDEFINED_STATION_ID === "PASTE_YOUR_STATION_ID_HERE") {
+                    showError("This page has not been configured. Please paste a station ID into the 'PREDEFINED_STATION_ID' variable in the HTML file.");
+                    return;
+                }
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.firestore();
+                auth = firebase.auth();
+                await auth.signInAnonymously();
+                listenToFirestore(PREDEFINED_STATION_ID);
+            } catch (e) {
+                showError("Failed to initialize the application.");
+                console.error("Firebase init error:", e);
+            }
+        });
+
+        document.addEventListener('submit', (e) => {
+            if (e.target.id === 'add-crew-form') handleAddCrew(e);
+        });
+
+        document.addEventListener('click', (e) => {
+            const action = e.target.dataset.action;
+            if (action === 'open-add-crew-modal') openAddCrewModal();
+            else if (['toggle-status', 'increment', 'decrement', 'delete-crew'].includes(action)) {
+                handleCrewAction(e);
+            }
+        });
+
+        addCrewModalClose.addEventListener('click', closeAddCrewModal);
+        confirmModalCancel.addEventListener('click', closeConfirmModal);
+    </script>
+</body>
+</html>
+

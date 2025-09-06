@@ -1,0 +1,215 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>12COFD- Active Units</title>
+    <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+    <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+    <link rel="icon" type="image/x-icon" href="favicon.ico">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .animate-spin { animation: spin 1s linear infinite; }
+    </style>
+</head>
+<body class="bg-gray-800 text-white font-sans">
+
+    <header class="bg-gray-900 shadow-lg">
+        <div class="container mx-auto px-4 py-4">
+            <h1 class="text-3xl font-bold text-center text-red-500">CLARK COUNTY DEPARTMENTS FIRE/EMS STATUS</h1>
+        </div>
+    </header>
+
+    <main id="app-container" class="container mx-auto p-4 md:p-8">
+        <!-- Disclaimer -->
+        <div class="text-center text-sm text-gray-400 mb-6 italic">
+            <p>Disclaimer: If a box states there are 3 EMS and 3 FIRE, that doesn't necessarily mean there are 6 personnel. If a person is Fire only that equals 1 in the FIRE Field. If a person is EMS Only, that equals 1 in the EMS Field. If a Person is Fire and EMS, that equals 1 in the EMS field AND 1 in the FIRE field.</p>
+        </div>
+
+        <!-- Filter Input -->
+        <div class="mb-6">
+            <input type="text" id="filter-input" placeholder="Filter by station or crew name..." class="w-full p-3 bg-gray-700 border border-gray-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-red-500 transition-shadow">
+        </div>
+
+        <div id="error-container" class="hidden bg-yellow-900 border-l-4 border-yellow-500 text-yellow-300 p-4 mb-4" role="alert">
+            <p class="font-bold">Error</p>
+            <p id="error-message"></p>
+        </div>
+
+        <div id="spinner-container" class="flex justify-center items-center h-full py-16">
+            <div class="animate-spin rounded-full h-16 w-16 border-t-2 border-b-2 border-red-500"></div>
+        </div>
+
+        <div id="active-units-container" class="hidden grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+            <!-- Active units will be injected here -->
+        </div>
+        <div id="no-active-units" class="hidden text-center py-16">
+            <p class="text-2xl text-gray-400">No active units match the current filter.</p>
+        </div>
+    </main>
+
+    <!-- Firebase -->
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.8.0/firebase-firestore-compat.js"></script>
+
+    <script>
+        // --- !!! IMPORTANT !!! ---
+        // This should be the same configuration as your main status board.
+        const firebaseConfig = {
+          apiKey: "AIzaSyAaCahDa2xTO_ukTIhR3KLUCWPUI4dBd-o",
+          authDomain: "clark-county-fire-status.firebaseapp.com",
+          projectId: "clark-county-fire-status",
+          storageBucket: "clark-county-fire-status.firebasestorage.app",
+          messagingSenderId: "60516695608",
+          appId: "1:60516695608:web:24b87b5d108ba5ea2830cd",
+          measurementId: "G-GBBK5WTWR9"
+        };
+
+        // --- Global State & DOM References ---
+        let db;
+        let auth;
+        let allStationsData = [];
+        let firestoreUnsubscribe = null;
+
+        const spinner = document.getElementById('spinner-container');
+        const errorContainer = document.getElementById('error-container');
+        const errorMessage = document.getElementById('error-message');
+        const activeUnitsContainer = document.getElementById('active-units-container');
+        const noActiveUnitsMessage = document.getElementById('no-active-units');
+        const filterInput = document.getElementById('filter-input');
+
+        // --- Helper Functions ---
+        function showError(message) {
+            spinner.classList.add('hidden');
+            errorMessage.textContent = message;
+            errorContainer.classList.remove('hidden');
+            activeUnitsContainer.classList.add('hidden');
+        }
+
+        function renderActiveCrews() {
+            spinner.classList.add('hidden');
+            
+            const filterText = filterInput.value.toLowerCase().trim();
+
+            const allCrews = allStationsData.flatMap(station => 
+                station.crews.map(crew => ({ ...crew, stationName: station.name }))
+            );
+
+            let activeCrews = allCrews.filter(crew => crew.status === 'On Duty');
+
+            if (filterText) {
+                activeCrews = activeCrews.filter(crew => 
+                    crew.name.toLowerCase().includes(filterText) || 
+                    crew.stationName.toLowerCase().includes(filterText)
+                );
+            }
+            
+            activeCrews.sort((a, b) => a.stationName.localeCompare(b.stationName) || a.name.localeCompare(b.name));
+
+            if (activeCrews.length > 0) {
+                activeUnitsContainer.classList.remove('hidden');
+                noActiveUnitsMessage.classList.add('hidden');
+                activeUnitsContainer.innerHTML = activeCrews.map(crew => {
+                    let formattedTimestamp = 'N/A';
+                    if (crew.lastUpdated) {
+                        const lastUpdatedDate = new Date(crew.lastUpdated);
+                        const date = lastUpdatedDate.toLocaleDateString('en-US', {
+                            month: '2-digit',
+                            day: '2-digit',
+                            year: '2-digit'
+                        });
+                        const time = lastUpdatedDate.toLocaleTimeString('en-US', {
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            hour12: false,
+                            hourCycle: 'h23'
+                        });
+                        formattedTimestamp = `${date} ${time}`;
+                    }
+
+                    let emsHtml = '';
+                    if (crew.emsPersonnel > 0) {
+                        emsHtml = `
+                            <div class="text-center">
+                                <p class="font-bold text-blue-400">EMS</p>
+                                <p class="text-2xl font-semibold">${crew.emsPersonnel}</p>
+                            </div>
+                        `;
+                    }
+
+                    let fireHtml = '';
+                    if (crew.firePersonnel > 0) {
+                        fireHtml = `
+                            <div class="text-center">
+                                <p class="font-bold text-orange-400">FIRE</p>
+                                <p class="text-2xl font-semibold">${crew.firePersonnel}</p>
+                            </div>
+                        `;
+                    }
+            
+                    const personnelHtml = emsHtml + fireHtml;
+                    const flexClass = (crew.emsPersonnel > 0 && crew.firePersonnel > 0) ? 'justify-between' : 'justify-center';
+
+                    return `
+                    <div class="bg-gray-900 rounded-lg shadow-xl p-4 border-l-4 border-green-500 flex flex-col justify-between">
+                        <div>
+                            <p class="text-xl font-bold text-white">${crew.name}</p>
+                            <p class="text-md text-gray-400 mb-2">${crew.stationName}</p>
+                            ${personnelHtml ? `<div class="flex ${flexClass} w-full text-sm mt-4">${personnelHtml}</div>` : ''}
+                        </div>
+                        <div class="mt-4 pt-2 border-t border-gray-700 text-right">
+                            <p class="text-xs text-gray-500">Updated: ${formattedTimestamp}</p>
+                        </div>
+                    </div>
+                    `;
+                }).join('');
+            } else {
+                activeUnitsContainer.classList.add('hidden');
+                noActiveUnitsMessage.classList.remove('hidden');
+            }
+        }
+
+        function listenToFirestore() {
+            if (firestoreUnsubscribe) return;
+
+            const stationsCollection = db.collection("stations");
+            firestoreUnsubscribe = stationsCollection.onSnapshot((snapshot) => {
+                allStationsData = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
+                renderActiveCrews(); // Re-render with current filter whenever data changes
+            }, err => {
+                console.error("Error fetching stations:", err);
+                showError("Could not fetch data from the database. This is likely a permissions issue.");
+            });
+        }
+
+        // --- App Initialization ---
+        document.addEventListener('DOMContentLoaded', async () => {
+            try {
+                if (!firebaseConfig.apiKey) {
+                    showError("Firebase configuration is missing.");
+                    return;
+                }
+
+                firebase.initializeApp(firebaseConfig);
+                db = firebase.firestore();
+                auth = firebase.auth();
+
+                await auth.signInAnonymously();
+                listenToFirestore();
+
+            } catch (e) {
+                console.error("Firebase initialization error:", e);
+                showError("Failed to initialize the application.");
+            }
+        });
+        
+        // --- Event Listeners ---
+        filterInput.addEventListener('input', renderActiveCrews);
+
+    </script>
+</body>
+</html>
+
