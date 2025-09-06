@@ -50,6 +50,7 @@
 
     <div class="container mx-auto p-2 sm:p-4 md:p-6 lg:p-8">
         
+        <!-- Header Section (Mobile Optimized) -->
         <header class="flex flex-wrap justify-between items-center gap-y-3 mb-6 bg-slate-800/50 backdrop-blur-sm border border-slate-700 p-3 sm:p-4 rounded-lg shadow-lg">
             <div class="flex items-center">
                  <img src="favicon-32x32.png" alt="Hospital Status Logo" class="w-8 h-8 sm:w-10 sm:h-10 mr-3">
@@ -57,7 +58,7 @@
             </div>
             <div class="flex items-center gap-2 sm:gap-4 w-full sm:w-auto">
                 <button id="filter-btn" class="flex-grow sm:flex-grow-0 bg-slate-700 text-slate-200 py-2 px-4 rounded-md hover:bg-slate-600 text-sm font-semibold transition-colors flex items-center justify-center gap-2 border border-slate-600">
-                    <svg class="w-5 h-5" xmlns="http://www.w.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.572a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" /></svg>
+                    <svg class="w-5 h-5" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="2" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" d="M12 3c2.755 0 5.455.232 8.083.678.533.09.917.556.917 1.096v1.044a2.25 2.25 0 01-.659 1.591l-5.432 5.432a2.25 2.25 0 00-.659 1.591v2.927a2.25 2.25 0 01-1.244 2.013L9.75 21v-6.572a2.25 2.25 0 00-.659-1.591L3.659 7.409A2.25 2.25 0 013 5.818V4.774c0-.54.384-1.006.917-1.096A48.32 48.32 0 0112 3z" /></svg>
                     Filter
                 </button>
                 <div id="clock" class="text-sm sm:text-base font-semibold text-slate-300 bg-slate-700/50 border border-slate-700 px-3 py-2 rounded-md w-auto text-center flex-grow sm:flex-grow-0">
@@ -66,14 +67,16 @@
             </div>
         </header>
 
-        <main id="status-board" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4">
-            <div class="md:col-span-2 lg:col-span-3 text-center p-10 bg-slate-800/50 border border-slate-700 rounded-lg shadow-lg">
+        <!-- Main Status Board Grid - UPDATED FOR COMPACT VIEW -->
+        <main id="status-board" class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+            <div class="col-span-full text-center p-10 bg-slate-800/50 border border-slate-700 rounded-lg shadow-lg">
                 <p class="text-slate-500">Connecting to live data...</p>
             </div>
         </main>
         
     </div>
 
+    <!-- Filter Modal (Mobile Optimized) -->
     <div id="filter-modal" class="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-4 hidden z-50">
         <div class="bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-4 sm:p-6 w-full max-w-lg relative max-h-[90vh] flex flex-col">
             <button id="close-filter-modal-btn" class="absolute top-3 right-3 text-slate-400 hover:text-slate-200">
@@ -81,6 +84,7 @@
             </button>
             <h3 class="text-xl font-bold mb-4 text-slate-100">Select Hospitals</h3>
             <div id="hospital-filter-list" class="flex-grow overflow-y-auto border-y border-slate-700 py-4 my-4">
+                <!-- Checkboxes will be populated here by JavaScript -->
                 <p class="text-slate-500">Loading hospitals...</p>
             </div>
             <div class="flex flex-col-reverse sm:flex-row sm:justify-end gap-3">
@@ -94,6 +98,7 @@
         </div>
     </div>
 
+    <!-- Update Alert Overlay -->
     <div id="update-alert" class="fixed inset-0 bg-black bg-opacity-70 backdrop-blur-sm flex items-center justify-center p-4 z-50 hidden">
         <div class="bg-slate-800 border border-slate-700 rounded-lg shadow-xl p-6 sm:p-8 text-center max-w-md w-full animate-fade-in-down">
              <svg class="w-16 h-16 text-blue-500 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor">
@@ -102,7 +107,8 @@
             <h3 class="text-2xl font-bold text-slate-100 mb-2">Status Update</h3>
             <p class="text-slate-300 text-lg mb-4"><strong id="updated-hospital-name" class="font-semibold text-slate-100"></strong> has been updated.</p>
             <div id="update-details" class="text-left bg-slate-900/50 p-4 rounded-lg border border-slate-700">
-                </div>
+                <!-- Details will be injected here -->
+            </div>
         </div>
     </div>
     
@@ -171,7 +177,7 @@
                 : allHospitals;
 
             if (!hospitalsToDisplay || hospitalsToDisplay.length === 0) {
-                 board.innerHTML = `<div class="md:col-span-2 lg:col-span-3 text-center p-10 bg-slate-800/50 border border-slate-700 rounded-lg shadow-lg"><p class="text-slate-500">No hospitals match your filter, or no data is available.</p></div>`;
+                 board.innerHTML = `<div class="col-span-full text-center p-10 bg-slate-800/50 border border-slate-700 rounded-lg shadow-lg"><p class="text-slate-500">No hospitals match your filter, or no data is available.</p></div>`;
                  return;
             }
             
@@ -184,24 +190,29 @@
             });
 
             hospitalsToDisplay.forEach(hospital => {
-                let statusBannerClass = '';
+                let statusBorderClass = '';
+                let statusTextClass = '';
                 let statusText = '';
 
                 switch (hospital.status) {
                     case 'accepting':
-                        statusBannerClass = 'bg-green-500/80';
-                        statusText = 'Accepting Patients';
+                        statusBorderClass = 'border-green-500';
+                        statusTextClass = 'text-green-400';
+                        statusText = 'Accepting';
                         break;
                     case 'diversion':
-                        statusBannerClass = 'bg-red-500/80';
-                        statusText = 'On Diversion';
+                        statusBorderClass = 'border-red-500';
+                        statusTextClass = 'text-red-400';
+                        statusText = 'Diversion';
                         break;
                     case 'notice':
-                        statusBannerClass = 'bg-yellow-500/80';
-                        statusText = 'Special Notice';
+                        statusBorderClass = 'border-yellow-500';
+                        statusTextClass = 'text-yellow-400';
+                        statusText = 'Notice';
                         break;
                     default:
-                        statusBannerClass = 'bg-slate-600/80';
+                        statusBorderClass = 'border-slate-600';
+                        statusTextClass = 'text-slate-500';
                         statusText = 'Unknown';
                 }
                 
@@ -212,14 +223,14 @@
                 }
 
                 const cardItem = `
-                    <div id="${hospital.id}" class="bg-slate-800/50 border border-slate-700 rounded-lg shadow-lg flex flex-col overflow-hidden transition-all duration-300 hover:bg-slate-800/80 hover:border-slate-600">
-                        <div class="font-bold p-2 ${statusBannerClass} text-white text-center text-sm">
-                            ${statusText}
-                        </div>
-                        <div class="p-3 sm:p-4 flex flex-col flex-grow">
-                            <h2 class="text-lg font-bold text-slate-100">${hospital.name}</h2>
-                            <p class="text-sm text-slate-400 mt-2 flex-grow"><span class="font-semibold text-slate-300">Notes:</span> ${hospital.notes || 'No updates.'}</p>
-                            <p class="text-xs text-slate-500 mt-3 pt-3 border-t border-slate-700 w-full"><span class="font-semibold">Last Updated:</span> ${lastUpdatedText}</p>
+                    <div id="${hospital.id}" class="bg-slate-800/50 border border-slate-700 rounded-lg shadow-md flex flex-col transition-all duration-300 hover:bg-slate-800/80 hover:border-slate-600/80 border-t-4 ${statusBorderClass}">
+                        <div class="p-3 flex flex-col flex-grow min-h-[140px]">
+                            <div class="flex justify-between items-start gap-2">
+                                <h2 class="text-base font-bold text-slate-100">${hospital.name}</h2>
+                                <span class="flex-shrink-0 text-xs font-semibold ${statusTextClass} bg-slate-900/50 px-2 py-0.5 rounded-full">${statusText}</span>
+                            </div>
+                            <p class="text-xs text-slate-400 mt-2 flex-grow">${hospital.notes || 'No updates.'}</p>
+                            <p class="text-[11px] text-slate-500 mt-2 pt-2 border-t border-slate-700/50 w-full text-right">${lastUpdatedText}</p>
                         </div>
                     </div>
                 `;
@@ -230,7 +241,6 @@
         const updateClock = () => {
             const now = new Date();
             let options;
-            // Use a more compact date/time format on smaller screens
             if (window.innerWidth < 768) {
                 options = { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false };
             } else {
@@ -298,10 +308,7 @@
         const alertAudio = document.getElementById('alert-audio');
         let alertTimeout;
         
-        // --- Custom Alert Tone ---
-        // To use your own MP3, place it in the same directory as this HTML file
-        // and update the URL below.
-        const customAlertToneUrl = "./hosecart.mp3"; // <<< REPLACE WITH YOUR MP3 FILE PATH
+        const customAlertToneUrl = "./hosecart.mp3"; 
 
         const playAlertTone = () => {
             const currentSrc = new URL(alertAudio.src, window.location.href).href;
@@ -398,12 +405,12 @@
                 isInitialLoad = false;
             }, (error) => {
                 console.error("Error fetching live data: ", error);
-                document.getElementById('status-board').innerHTML = `<div class="md:col-span-2 lg:col-span-3 text-center p-10 bg-slate-800/50 rounded-lg shadow-lg"><p class="text-red-500">Error connecting to live data. Please refresh.</p></div>`;
+                document.getElementById('status-board').innerHTML = `<div class="col-span-full text-center p-10 bg-slate-800/50 rounded-lg shadow-lg"><p class="text-red-500">Error connecting to live data. Please refresh.</p></div>`;
             });
 
             updateClock();
-            setInterval(updateClock, 1000 * 30); // Update clock more frequently for responsiveness
-            window.addEventListener('resize', updateClock); // Update clock on window resize
+            setInterval(updateClock, 1000 * 30);
+            window.addEventListener('resize', updateClock);
         };
 
         main();
